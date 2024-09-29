@@ -82,7 +82,7 @@ void HandleClient(TcpClient socket)
                 numberX = nums[0];
                 numberY = nums[1];
             }
-            catch (FormatException)
+            catch (Exception) // catch-all
             {
                 writer.WriteLine("Invalid input. Please input two numbers seperated by a space.");
                 writer.Flush();
