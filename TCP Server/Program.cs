@@ -4,15 +4,12 @@ using System.Net.Sockets;
 
 Console.WriteLine("TCP Server");
 
-// Listens for incomming connections
+// Listens for incoming connections and starts a new task for each client
 TcpListener listener = new TcpListener(IPAddress.Any, 7);
-
-// Starting server
 listener.Start();
 
 while (true)
 {
-    // Establish connection/socket
     TcpClient socket = listener.AcceptTcpClient();
     Task.Run(() => HandleClient(socket)); // TODO: Not awaited
 }
@@ -34,29 +31,91 @@ void HandleClient(TcpClient socket)
 
     while (socket.Connected)
     {
-        // Reading what the client sends
+        // Read message from client
         string? message = reader.ReadLine();
-        Console.WriteLine($"Debug: Client sent: {message}"); // for debugging purposes
+        Console.WriteLine($"Debug: Client sent: {message}");
 
-        // Client has disconnected
+        // Client lost connection
         if (message == null) 
         {
-            Console.WriteLine($"Debug: Client lost connection!"); // for debugging purposes
+            Console.WriteLine($"Debug: Client lost connection!");
             socket.Close();
             break;
         }
 
-        // Client wants to stop the connection
+        // Sanitize message
+        message = message.Trim().ToLower();
+
+        // Client stopped connection
         if (message == "stop")
         {
-            Console.WriteLine($"Debug: Client stopped connection!"); // for debugging purposes
+            Console.WriteLine($"Debug: Client stopped connection!");
             writer.WriteLine("Closing down connection!");
             writer.Flush();
             socket.Close();
             break;
         }
+
+        int numberX = 0;
+        int numberY = 0;
+
+        // Check if message is a command that requires numbers
+        if (message == "random" || message == "add" || message == "subtract")
+        {
+            writer.WriteLine($"Input numbers");
+            writer.Flush();
+
+            string? numbers = reader.ReadLine();
+
+            if (numbers == null)
+            {
+                Console.WriteLine($"Debug: Client lost connection!");
+                socket.Close();
+                break;
+            }
+
+            // Sanitize input
+            try
+            {
+                int[] nums = numbers.Split(' ').Select(int.Parse).ToArray();
+                numberX = nums[0];
+                numberY = nums[1];
+            }
+            catch (FormatException)
+            {
+                writer.WriteLine("Invalid input. Please input two numbers seperated by a space.");
+                writer.Flush();
+                continue;
+            }
+        }
+
+        // Handle message
+        switch (message)
+        {
+            case "random":
+                Random random = new Random();
+                int randomNumber = random.Next(numberX, numberY);
+                writer.WriteLine($"Random number: {randomNumber}");
+                break;
+
+            case "add":
+                int sum = numberX + numberY;
+                writer.WriteLine($"Sum: {sum}");
+                break;
+
+            case "subtract":
+                int difference = numberX - numberY;
+                writer.WriteLine($"Difference: {difference}");
+                break;
+
+            default:
+                writer.WriteLine("Invalid command. Please try again.");
+                break;
+        }
+
+        writer.Flush();
     }
 
-    // Close connection/socket and stop listener
+    // Close the connection
     socket.Close();
 }
