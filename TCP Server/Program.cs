@@ -28,23 +28,33 @@ void HandleClient(TcpClient socket)
     StreamReader reader = new StreamReader(ns);
     StreamWriter writer = new StreamWriter(ns);
 
+    Console.WriteLine("Debug: Client connected.");
+    writer.WriteLine("You're now connected to the TCP Server.");
+    writer.Flush();
+
     while (socket.Connected)
     {
         // Reading what the client sends
         string? message = reader.ReadLine();
-        Console.WriteLine($"Client sent: {message}"); // for debugging purposes
+        Console.WriteLine($"Debug: Client sent: {message}"); // for debugging purposes
 
+        // Client has disconnected
+        if (message == null) 
+        {
+            Console.WriteLine($"Debug: Client lost connection!"); // for debugging purposes
+            socket.Close();
+            break;
+        }
+
+        // Client wants to stop the connection
         if (message == "stop")
         {
-            Console.WriteLine($"Debug: Closing down connection!"); // for debugging purposes
+            Console.WriteLine($"Debug: Client stopped connection!"); // for debugging purposes
             writer.WriteLine("Closing down connection!");
             writer.Flush();
             socket.Close();
+            break;
         }
-
-        // Writing back/echo to the client
-        writer.WriteLine(message.ToUpper());
-        writer.Flush();
     }
 
     // Close connection/socket and stop listener
