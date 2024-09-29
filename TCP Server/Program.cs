@@ -26,8 +26,9 @@ void HandleClient(TcpClient socket)
     StreamWriter writer = new StreamWriter(ns);
 
     Console.WriteLine("Debug: Client connected.");
-    writer.WriteLine("You're now connected to the TCP Server.");
-    writer.Flush();
+    // Sadly deadlocks the interaction between the Client and Server
+    //writer.WriteLine("You're now connected to the TCP Server.");
+    //writer.Flush();
 
     while (socket.Connected)
     {
