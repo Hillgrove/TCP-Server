@@ -1,6 +1,7 @@
 ﻿
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 
 Console.WriteLine("TCP Server");
 
@@ -14,109 +15,104 @@ while (true)
     Task.Run(() => HandleClient(socket)); // TODO: Not awaited
 }
 
-// Stopping server
-listener.Stop();  // TODO: Unreachable code
-
-
 void HandleClient(TcpClient socket)
 {
     // Streams for reading and writing to the connection/socket
     NetworkStream ns = socket.GetStream();
     StreamReader reader = new StreamReader(ns);
-    StreamWriter writer = new StreamWriter(ns);
+    StreamWriter writer = new StreamWriter(ns) { AutoFlush = true };
 
     Console.WriteLine("Debug: Client connected.");
-    // Sadly deadlocks the interaction between the Client and Server
-    //writer.WriteLine("You're now connected to the TCP Server.");
-    //writer.Flush();
 
     while (socket.Connected)
     {
-        // Read message from client
+        // Read JSON message from client
         string? message = reader.ReadLine();
-        Console.WriteLine($"Debug: Client sent: {message}");
+        Console.WriteLine($"Debug: Received: {message}");
 
         // Client lost connection
         if (message == null)
         {
-            Console.WriteLine($"Debug: Client lost connection!");
+            Console.WriteLine("Debug: Client lost connection!");
             socket.Close();
             break;
         }
 
-        // Sanitize message
-        message = message.Trim().ToLower();
-
-        // Client stopped connection
-        if (message == "stop")
+        // Parse JSON request
+        Request request;
+        try
         {
-            Console.WriteLine($"Debug: Client stopped connection!");
-            writer.WriteLine("Closing down connection!");
-            writer.Flush();
-            socket.Close();
-            break;
-        }
-
-        int numberX = 0;
-        int numberY = 0;
-
-        // Check if message is a command that requires numbers
-        if (message == "random" || message == "add" || message == "subtract")
-        {
-            writer.WriteLine($"Input numbers");
-            writer.Flush();
-
-            string? numbers = reader.ReadLine();
-
-            if (numbers == null)
+            request = JsonSerializer.Deserialize<Request>(message);
+            if (request == null || string.IsNullOrEmpty(request.Method))
             {
-                Console.WriteLine($"Debug: Client lost connection!");
-                socket.Close();
-                break;
-            }
-
-            // Sanitize input
-            try
-            {
-                int[] nums = numbers.Split(' ').Select(int.Parse).ToArray();
-                numberX = nums[0];
-                numberY = nums[1];
-            }
-            catch (Exception) // catch-all
-            {
-                writer.WriteLine("Invalid input. Please input two numbers seperated by a space.");
-                writer.Flush();
-                continue;
+                throw new Exception("Invalid request");
             }
         }
+        catch (Exception)
+        {
+            // Send error response if JSON is invalid
+            var errorResponse = new Response { Error = "Invalid request format" };
+            string errorJson = JsonSerializer.Serialize(errorResponse);
+            writer.WriteLine(errorJson);
+            continue;
+        }
 
-        // Handle message
-        switch (message)
+        // Handle the request based on the method
+        Response response = new Response();
+        switch (request.Method.ToLower())
         {
             case "random":
-                Random random = new Random();
-                int randomNumber = random.Next(numberX, numberY);
-                writer.WriteLine($"Random number: {randomNumber}");
+                try
+                {
+                    Random random = new Random();
+                    int randomNumber = random.Next(request.NumberX, request.NumberY);
+                    response.Result = $"Random number: {randomNumber}";
+                }
+                catch (Exception ex)
+                {
+                    response.Error = $"Error generating random number: {ex.Message}";
+                }
                 break;
 
             case "add":
-                int sum = numberX + numberY;
-                writer.WriteLine($"Sum: {sum}");
+                response.Result = $"Sum: {request.NumberX + request.NumberY}";
                 break;
 
             case "subtract":
-                int difference = numberX - numberY;
-                writer.WriteLine($"Difference: {difference}");
+                response.Result = $"Difference: {request.NumberX - request.NumberY}";
                 break;
 
+            case "stop":
+                response.Result = "Closing down connection!";
+                string responseJson = JsonSerializer.Serialize(response);
+                writer.WriteLine(responseJson);
+                socket.Close();
+                return;
+
             default:
-                writer.WriteLine("Invalid command. Please try again.");
+                response.Error = "Invalid method. Please try again.";
                 break;
         }
 
-        writer.Flush();
+        // Send JSON response back to the client
+        string jsonResponse = JsonSerializer.Serialize(response);
+        writer.WriteLine(jsonResponse);
     }
 
     // Close the connection
     socket.Close();
+}
+
+// Define request and response classes for JSON serialization
+public class Request
+{
+    public string Method { get; set; }
+    public int NumberX { get; set; }
+    public int NumberY { get; set; }
+}
+
+public class Response
+{
+    public string Result { get; set; }
+    public string Error { get; set; }
 }
